@@ -23,22 +23,23 @@ def private_key_to_public_key(private_key):
     in the overall speed of the program.
     Average Time: 0.0031567731 seconds
     """
-    return '04' + PrivateKey().fromString(bytes.fromhex(private_key)).publicKey().toString().hex().upper()
+    return f'04{PrivateKey().fromString(bytes.fromhex(private_key)).publicKey().toString().hex().upper()}'
 
 def public_key_to_address(public_key):
     """Accept a public key and convert it to its resepective P2PKH wallet address.
     Average Time: 0.0000801390 seconds
     """
-    output = []; alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    output = []
+    alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
     var = hashlib.new('ripemd160')
     var.update(hashlib.sha256(binascii.unhexlify(public_key.encode())).digest())
-    var = '00' + var.hexdigest() + hashlib.sha256(hashlib.sha256(binascii.unhexlify(('00' + var.hexdigest()).encode())).digest()).hexdigest()[0:8]
+    var = f"00{var.hexdigest()}{hashlib.sha256(hashlib.sha256(binascii.unhexlify(f'00{var.hexdigest()}'.encode())).digest()).hexdigest()[:8]}"
     count = [char != '0' for char in var].index(True) // 2
     n = int(var, 16)
     while n > 0:
         n, remainder = divmod(n, 58)
         output.append(alphabet[remainder])
-    for i in range(count): output.append(alphabet[0])
+    output.extend(alphabet[0] for _ in range(count))
     return ''.join(output[::-1])
 
 def process(private_key, public_key, address, database):
@@ -52,22 +53,48 @@ def process(private_key, public_key, address, database):
        address in database[2] or \
        address in database[3]:
         with open('plutus.txt', 'a') as file:
-            file.write('hex private key: ' + str(private_key) + '\n' +
-                       'WIF private key: ' + str(private_key_to_WIF(private_key)) + '\n' +
-                       'public key: ' + str(public_key) + '\n' +
-                       'address: ' + str(address) + '\n\n')
+            file.write(
+                (
+                    (
+                        (
+                            (
+                                (
+                                    (
+                                        f'hex private key: {str(private_key)}'
+                                        + '\n'
+                                        + 'WIF private key: '
+                                    )
+                                    + str(private_key_to_WIF(private_key))
+                                    + '\n'
+                                )
+                                + 'public key: '
+                            )
+                            + str(public_key)
+                            + '\n'
+                        )
+                        + 'address: '
+                    )
+                    + str(address)
+                    + '\n\n'
+                )
+            )
     else: 
-         print(str(address))
+        print(address)
 
 def private_key_to_WIF(private_key):
     """Convert the hex private key into Wallet Import Format for easier wallet importing. This function is 
     only called if a wallet with a balance is found. Because that event is rare, this function is not significant 
     to the main pipeline of the program and is not timed.
     """
-    var = hashlib.sha256(binascii.unhexlify(hashlib.sha256(binascii.unhexlify('80' + private_key)).hexdigest())).hexdigest()
-    var = binascii.unhexlify('80' + private_key + var[0:8])
+    var = hashlib.sha256(
+        binascii.unhexlify(
+            hashlib.sha256(binascii.unhexlify(f'80{private_key}')).hexdigest()
+        )
+    ).hexdigest()
+    var = binascii.unhexlify(f'80{private_key}{var[:8]}')
     alphabet = chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-    value = pad = 0; result = ''
+    value = pad = 0
+    result = ''
     for i, c in enumerate(var[::-1]): value += 256**i * c
     while value >= len(alphabet):
         div, mod = divmod(value, len(alphabet))
@@ -97,21 +124,21 @@ if __name__ == '__main__':
     """
     database = [set() for _ in range(4)]
     count = len(os.listdir(DATABASE))
-    half = count // 2; quarter = half // 2
+    half = count // 2
+    quarter = half // 2
     for c, p in enumerate(os.listdir(DATABASE)):
         print('\rreading database: ' + str(c + 1) + '/' + str(count), end = ' ')
         with open(DATABASE + p, 'rb') as file:
             if c < half:
                 if c < quarter: database[0] = database[0] | pickle.load(file)
                 else: database[1] = database[1] | pickle.load(file)
-            else:
-                if c < half + quarter: database[2] = database[2] | pickle.load(file)
-                else: database[3] = database[3] | pickle.load(file)
+            elif c < half + quarter: database[2] = database[2] | pickle.load(file)
+            else: database[3] = database[3] | pickle.load(file)
     print('DONE')
-    
+
     # To verify the database size, remove the # from the line below
     #print('database size: ' + str(sum(len(i) for i in database))); quit()
-    
-    for cpu in range(multiprocessing.cpu_count()):
+
+    for _ in range(multiprocessing.cpu_count()):
         multiprocessing.Process(target = main, args = (database, )).start()
    
